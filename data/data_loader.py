@@ -1,7 +1,7 @@
 import os
 import numpy as np
 import pandas as pd
-
+from sklearn.preprocessing import MinMaxScaler
 import torch
 from torch.utils.data import Dataset, DataLoader
 # from sklearn.preprocessing import StandardScaler
@@ -187,11 +187,11 @@ class Dataset_ETT_minute(Dataset):
     def inverse_transform(self, data):
         return self.scaler.inverse_transform(data)
 
-#自定义数据处理类
+
 class Dataset_Custom(Dataset):
     def __init__(self, root_path, size:list, flag='train', 
                  features='MS', data_path='CSI300.csv', 
-                 target='Close', scale=True, inverse=False, timeenc=0, freq='d', cols=None,):
+                 target='Close', scale=True, inverse=True, timeenc=0, freq='d', cols=None,):
         # size [seq_len, label_len, pred_len]
         # info
         self.seq_len = size[0]
@@ -214,22 +214,21 @@ class Dataset_Custom(Dataset):
         self.__read_data__()
 
     def __read_data__(self):
-        self.scaler = StandardScaler()
-        print(os.path.join(self.root_path,self.data_path))#输出路径./data/CSI300.csv
+        self.scaler = MinMaxScaler()
+        print(os.path.join(self.root_path,self.data_path))
         df_raw = pd.read_csv(os.path.join(self.root_path,
                                           self.data_path))
         
         '''
         df_raw.columns: ['date', ...(other features), target feature]
         '''
-        # cols = list(df_raw.columns); 
-        # cols指定训练时需要的features
         if self.cols:
             cols=self.cols.copy()
         else:
             cols=list(df_raw.columns[1:])
 
 
+        
         num_train = int(len(df_raw)*0.7)
         num_test = int(len(df_raw)*0.2)
         num_vali = len(df_raw) - num_train - num_test
@@ -285,8 +284,8 @@ class Dataset_Custom(Dataset):
 
 class Dataset_Pred(Dataset):
     def __init__(self, root_path, flag='pred', size=None, 
-                 features='S', data_path='ETTh1.csv', 
-                 target='OT', scale=True, inverse=False, timeenc=0, freq='15min', cols=None):
+                 features='MS', data_path='CSI300.csv', 
+                 target='Close', scale=True, inverse=False, timeenc=0, freq='d', cols=None):
         # size [seq_len, label_len, pred_len]
         # info
         if size == None:
@@ -312,7 +311,7 @@ class Dataset_Pred(Dataset):
         self.__read_data__()
 
     def __read_data__(self):
-        self.scaler = StandardScaler()
+        self.scaler = MinMaxScaler()
         df_raw = pd.read_csv(os.path.join(self.root_path,
                                           self.data_path))
         '''

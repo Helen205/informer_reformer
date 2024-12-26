@@ -100,7 +100,7 @@ class Exp_Informer(Exp_Basic):
         return model_optim
     
     def _select_criterion(self):
-        criterion=nn.MSELoss()
+        criterion = nn.HuberLoss(delta=1.0)
         return criterion
 
     def vali(self,vali_data,vali_loader,criterion):
@@ -214,7 +214,7 @@ class Exp_Informer(Exp_Basic):
         test_data,test_loader=self._get_data('test')
         self.model.eval()
         
-        results=[]   #记录反归一化后的预测收盘价
+        results=[]   
         preds=[]
         trues=[]
 
@@ -274,5 +274,9 @@ class Exp_Informer(Exp_Basic):
             outputs=dataset_object.inverse_transform(outputs)
        # f_dim=-1 if self.args.features=='MS' else 0
         #batch_y=batch_y[:,-self.args.pred_len:,f_dim:].to(self.device)
+        
         batch_y=batch_y[:,-self.args.pred_len:,[0]].to(self.device)
+        # Model çıktısı ve gerçek değerleri kontrol edin
+
+
         return outputs,batch_y

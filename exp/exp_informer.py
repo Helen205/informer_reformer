@@ -95,9 +95,27 @@ class Exp_Informer(Exp_Basic):
 
         return data_set,data_loader
 
+    # exp_informer.py içindeki _select_optimizer metodunu güncelleyelim:
+
     def _select_optimizer(self):
-        model_optim=optim.Adam(self.model.parameters(),lr=self.args.learning_rate)
-        return model_optim
+        model_params = self.model.parameters()
+        
+        if self.args.optimizer.lower() == 'adam':
+            return optim.Adam(model_params, lr=self.args.learning_rate)
+        elif self.args.optimizer.lower() == 'sgd':
+            return optim.SGD(model_params, lr=self.args.learning_rate, momentum=0.9)
+        elif self.args.optimizer.lower() == 'rmsprop':
+            return optim.RMSprop(model_params, lr=self.args.learning_rate, alpha=0.99)
+        elif self.args.optimizer.lower() == 'adamw':
+            return optim.AdamW(model_params, lr=self.args.learning_rate, weight_decay=0.01)
+        elif self.args.optimizer.lower() == 'adagrad':
+            return optim.Adagrad(model_params, lr=self.args.learning_rate)
+        elif self.args.optimizer.lower() == 'adadelta':
+            return optim.Adadelta(model_params, lr=self.args.learning_rate)
+        else:
+            raise ValueError(f"Optimizer {self.args.optimizer} is not supported. Please choose from: adam, sgd, rmsprop, adamw, adagrad, adadelta")
+
+    
     
     def _select_criterion(self):
         criterion = nn.HuberLoss(delta=1.0)

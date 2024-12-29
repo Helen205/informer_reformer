@@ -50,13 +50,13 @@ parser.add_argument('--do_predict', action='store_true', help='whether to predic
 parser.add_argument('--mix', action='store_false', help='use mix attention in generative decoder', default=True)
 parser.add_argument('--cols', type=str, nargs='+', help='certain cols from the data files as the input features')
 parser.add_argument('--num_workers', type=int, default=0, help='data loader num workers')
-parser.add_argument('--itr', type=int, default=100, help='experiments times')
+parser.add_argument('--itr', type=int, default=1, help='experiments times')
 parser.add_argument('--train_epochs', type=int, default=100, help='train epochs')
 parser.add_argument('--batch_size', type=int, default=128, help='batch size of train input data')
-parser.add_argument('--patience', type=int, default=20, help='early stopping patience')
-parser.add_argument('--learning_rate', type=float, default=0.00005, help='optimizer learning rate')
+parser.add_argument('--patience', type=int, default=15, help='early stopping patience')
+parser.add_argument('--learning_rate', type=float, default=0.00007, help='optimizer learning rate')
 parser.add_argument('--des', type=str, default='test',help='exp description')
-parser.add_argument('--loss', type=str, default='mse',help='loss function')
+parser.add_argument('--loss', type=str, default='huber',help='loss function')
 parser.add_argument('--optimizer', type=str, default='adamw',help='optimizer to use (adam, sgd, rmsprop, adamw, adagrad, adadelta)')
 #parser.add_argument('--momentum', type=float, default=0.9,help='momentum for SGD optimizer')
 #parser.add_argument('--weight_decay', type=float, default=0.12,help='weight decay for AdamW optimizer')
@@ -96,23 +96,33 @@ for ii in range(args.itr):
                 args.d_model, args.n_heads, args.e_layers, args.d_layers, args.d_ff, args.attn, args.factor, 
                 args.embed, args.distil, args.mix, args.des, ii)
     
+    
+    
     exp = Exp(args)
     train_loss, val_loss = exp.train(setting)  
     test_loss = exp.test(setting)
     
     writer.add_scalar("Train Loss", train_loss, ii)
     writer.add_scalar("Validation Loss", val_loss, ii)
-    writer.add_scalar("Test Loss", test_loss, ii)
-    writer.close()
+    writer.add_scalar("Test Loss", test_loss[0], ii)
+
+
 
     print('>>>>>>>start training : {}>>>>>>>>>>>>>>>>>>>>>>>>>>'.format(setting))
     exp.train(setting)
     
     print('>>>>>>>testing : {}<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<'.format(setting))
     exp.test(setting)
+    
+    save_path = os.path.join(args.checkpoints, f"{setting}_model.pth")
+    torch.save(exp.model.state_dict(), save_path)
+    print(f"Model saved to {save_path}")
+
 
 
     torch.cuda.empty_cache()
+
+writer.close()
 
 
 

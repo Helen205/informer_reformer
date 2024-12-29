@@ -71,8 +71,6 @@ class Dataset_ETT_hour(Dataset):
 
         self.data_x = data[border1:border2]
 
-        #inverse表示是否需要反归一化,若为true,则label不需要改动,直接使用df_data
-        #若为false(默认),则需要对label进行归一化,这样才能与训练特征相统一
         if self.inverse:
             self.data_y = df_data.values[border1:border2]
         else:
@@ -201,6 +199,9 @@ class Dataset_Custom(Dataset):
         assert flag in ['train', 'test', 'val']
         type_map = {'train':0, 'val':1, 'test':2}
         self.set_type = type_map[flag]
+        self.args = type('Args', (), {
+            'c_out': 1
+        })()
         
         self.features = features
         self.target = target

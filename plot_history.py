@@ -54,10 +54,10 @@ def plot_figure(path, historty, args):
     axs[1].set_yticks(y_ticks_1_major)
     axs[1].set_yticks(y_ticks_1_minor, minor=True)
     axs[1].grid()
-    axs[1].grid(which='minor', alpha=0.3) #不透明度
+    axs[1].grid(which='minor', alpha=0.3)
 
     plt.savefig(f"{path}/historty.png", dpi=200)
-    # plt.show()
+   
 
     print("Done.\n")
     return

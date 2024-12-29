@@ -108,8 +108,8 @@ class ProbAttention(nn.Module):
         U_part = self.factor * np.ceil(np.log(L_K)).astype('int').item() # c*ln(L_k)
         u = self.factor * np.ceil(np.log(L_Q)).astype('int').item() # c*ln(L_q) 
 
-        U_part = U_part if U_part<L_K else L_K   #大U用来随机选择K
-        u = u if u<L_Q else L_Q                    #小u用来选择top-u个Q
+        U_part = U_part if U_part<L_K else L_K  
+        u = u if u<L_Q else L_Q                   
         
         scores_top, index = self._prob_QK(queries, keys, sample_k=U_part, n_top=u) 
 

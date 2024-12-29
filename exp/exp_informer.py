@@ -226,7 +226,7 @@ class Exp_Informer(Exp_Basic):
         entropys=entropys/len(train_loader)
 
       #  print(entropys)
-    
+        return train_loss, vali_loss
 
     def test(self,setting):
         test_data,test_loader=self._get_data('test')
@@ -252,14 +252,14 @@ class Exp_Informer(Exp_Basic):
         mae,mse,rmse,mape,mspe=metric(preds,trues)
         if not os.path.exists(folder_path):
             os.makedirs(folder_path)
-        print('mse:{}, mae:{}'.format(mse, mae))
+        print('mse:{}, mae:{}, rmse:{}, mape:{}, mspe:{}'.format(mse, mae, rmse, mape, mspe))
 
         np.save(folder_path+'metrics.npy', np.array([mae, mse, rmse, mape, mspe]))
         np.save(folder_path+'pred.npy', preds)
         np.save(folder_path+'true.npy', trues)
 
 
-        return
+        return mae, mse, rmse, mape, mspe
 
 
 

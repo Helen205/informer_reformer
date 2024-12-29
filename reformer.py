@@ -1,3 +1,4 @@
+
 import numpy as np
 import pandas as pd
 import torch
@@ -8,18 +9,26 @@ import matplotlib.pyplot as plt
 from reformer_pytorch import Reformer
 from google.colab import drive
 import time
+import os
 from sklearn.metrics import mean_squared_error, r2_score, mean_absolute_error
 import numpy as np
 import matplotlib.pyplot as plt
+from torch.optim.lr_scheduler import ExponentialLR
+from google.colab import files
 
 def calculate_metrics(y_true, y_pred):
     """Geliştirilmiş metrik hesaplama fonksiyonu"""
+    y_true = np.array(y_true).ravel()
+    y_pred = np.array(y_pred).ravel()
+
+    print(f"y_true shape: {y_true.shape}, y_pred shape: {y_pred.shape}")
+
     mse = mean_squared_error(y_true, y_pred)
     rmse = np.sqrt(mse)
     mae = mean_absolute_error(y_true, y_pred)
     r2 = r2_score(y_true, y_pred)
 
-    # Güvenli MAPE hesaplama
+
     mask = y_true != 0
     mape = np.mean(np.abs((y_true[mask] - y_pred[mask]) / y_true[mask])) * 100
 
@@ -31,7 +40,7 @@ def calculate_metrics(y_true, y_pred):
         'R2': r2
     }
 
-def train_and_evaluate_model(model, train_loader, test_loader, optimizer, criterion, num_epochs, device, patience=10):
+def train_and_evaluate_model(model, train_loader, test_loader, optimizer, criterion, num_epochs, device, patience=20):
     train_losses = []
     test_losses = []
     best_test_loss = float('inf')
@@ -39,12 +48,9 @@ def train_and_evaluate_model(model, train_loader, test_loader, optimizer, criter
 
     training_start_time = time.time()
 
-    # Learning rate scheduler
-    scheduler = torch.optim.lr_scheduler.ReduceLROnPlateau(optimizer, 'min', patience=5)
-
     print("Eğitim başlıyor...")
     for epoch in range(num_epochs):
-        # Eğitim aşaması
+        # Eğitim
         model.train()
         train_loss = 0
         for batch_X, batch_y in train_loader:
@@ -55,7 +61,6 @@ def train_and_evaluate_model(model, train_loader, test_loader, optimizer, criter
             loss = criterion(output, batch_y)
             loss.backward()
 
-            # Gradient clipping
             torch.nn.utils.clip_grad_norm_(model.parameters(), max_norm=1.0)
 
             optimizer.step()
@@ -64,23 +69,33 @@ def train_and_evaluate_model(model, train_loader, test_loader, optimizer, criter
         avg_train_loss = train_loss / len(train_loader)
         train_losses.append(avg_train_loss)
 
-        # Test aşaması
+        # Test
         model.eval()
         test_loss = 0
+        all_predictions = []
+        all_true_values = []
+
         with torch.no_grad():
             for batch_X, batch_y in test_loader:
-                batch_X, batch_y = batch_X.to(device), batch_y.to(device)
+                batch_X = batch_X.to(device)
+                batch_y = batch_y.to(device)
                 output = model(batch_X)
                 loss = criterion(output, batch_y)
                 test_loss += loss.item()
 
+                # Tahminleri ve gerçek değerleri topla
+                all_predictions.extend(output.cpu().numpy())
+                all_true_values.extend(batch_y.cpu().numpy())
+
         avg_test_loss = test_loss / len(test_loader)
         test_losses.append(avg_test_loss)
 
-        # Learning rate güncelleme
-        scheduler.step(avg_test_loss)
+        if (epoch + 1) % 10 == 0:
+            print(f'Epoch [{epoch+1}/{num_epochs}], '
+                  f'Train Loss: {avg_train_loss:.4f}, '
+                  f'Test Loss: {avg_test_loss:.4f}')
 
-        # Early stopping kontrolü
+        # Early stopping
         if avg_test_loss < best_test_loss:
             best_test_loss = avg_test_loss
             patience_counter = 0
@@ -92,40 +107,33 @@ def train_and_evaluate_model(model, train_loader, test_loader, optimizer, criter
                 model.load_state_dict(best_model_state)
                 break
 
-        if (epoch + 1) % 10 == 0:
-            print(f'Epoch [{epoch+1}/{num_epochs}], '
-                  f'Train Loss: {avg_train_loss:.4f}, '
-                  f'Test Loss: {avg_test_loss:.4f}, '
-                  f'LR: {optimizer.param_groups[0]["lr"]:.6f}')
-
     training_time = time.time() - training_start_time
-    print(f"\nToplam eğitim süresi: {training_time:.2f} saniye")
 
-    # Çıkarım zamanı ölçümü
-    print("\nTest verisi üzerinde çıkarım yapılıyor...")
-    inference_start_time = time.time()
-
+    # Son tahminler
     model.eval()
-    predictions = []
-    true_values = []
-
+    final_predictions = []
+    final_true_values = []
+    inference_start_time = time.time()
     with torch.no_grad():
         for batch_X, batch_y in test_loader:
             batch_X = batch_X.to(device)
             output = model(batch_X)
-            predictions.extend(output.cpu().numpy())
-            true_values.extend(batch_y.numpy())
+            # Tüm batch'i topla
+            final_predictions.extend(output.cpu().numpy())
+            final_true_values.extend(batch_y.numpy())
 
+            # Boyutları kontrol et
+            if len(final_predictions) >= len(test_loader.dataset):
+                break
     inference_time = time.time() - inference_start_time
-    print(f"Toplam çıkarım süresi: {inference_time:.2f} saniye")
 
-    # Metrikleri hesapla
-    predictions = np.array(predictions)
-    true_values = np.array(true_values)
+    # Boyutları eşitle
+    final_predictions = np.array(final_predictions)[:len(test_loader.dataset)]
+    final_true_values = np.array(final_true_values)[:len(test_loader.dataset)]
 
-    metrics = calculate_metrics(true_values, predictions)
+    metrics = calculate_metrics(final_true_values, final_predictions)
 
-    # Görselleştirme
+      # Görselleştirme
     plt.figure(figsize=(12, 6))
     plt.plot(train_losses, label='Eğitim Kaybı', color='blue')
     plt.plot(test_losses, label='Test Kaybı', color='red')
@@ -136,21 +144,45 @@ def train_and_evaluate_model(model, train_loader, test_loader, optimizer, criter
     plt.grid(True)
     plt.show()
 
+
     return {
         'training_time': training_time,
         'inference_time': inference_time,
         'metrics': metrics,
         'train_losses': train_losses,
         'test_losses': test_losses,
-        'predictions': predictions,
-        'true_values': true_values
+        'predictions': final_predictions,
+        'true_values': final_true_values
     }
 
+def prepare_sequences(data, bucket_size=8, train=True):
+    """Geliştirilmiş sekans hazırlama fonksiyonu"""
+    seq_length = bucket_size * 2
+    xs = []
+    ys = []
+
+    # Sadece kapanış fiyatını tahmin edelim
+    close_index = features.index('Close')
+
+    for i in range(0, len(data) - seq_length - 1, 1):
+        x = data[i:i + seq_length]
+        # Sadece bir sonraki kapanış fiyatını tahmin et
+        y = data[i + seq_length, close_index]
+        if len(x) == seq_length:
+            xs.append(x)
+            ys.append(y)
+
+    return np.array(xs), np.array(ys).reshape(-1, 1)
+
+
 class ReformerTimeSeries(nn.Module):
-    def __init__(self, input_dim, d_model, depth, heads, bucket_size, n_hashes, output_dim):
+    def __init__(self, input_dim, d_model, depth, heads, bucket_size, n_hashes, output_dim=1):
         super().__init__()
 
         self.embedding = nn.Linear(input_dim, d_model)
+        self.pos_encoding = nn.Parameter(torch.randn(1, bucket_size * 2, d_model))
+
+        self.input_dropout = nn.Dropout(0.1)
 
         self.reformer = Reformer(
             dim=d_model,
@@ -158,43 +190,32 @@ class ReformerTimeSeries(nn.Module):
             heads=heads,
             bucket_size=bucket_size,
             n_hashes=n_hashes,
-            causal=True  # return_embeddings parametresini kaldırdık
+            causal=True
         )
 
         self.layer_norm = nn.LayerNorm(d_model)
 
         self.fc_out = nn.Sequential(
             nn.Linear(d_model, d_model // 2),
+            nn.LayerNorm(d_model // 2),
             nn.ReLU(),
-            nn.Dropout(0.1),  # Overfitting'i önlemek için dropout ekledik
-            nn.Linear(d_model // 2, output_dim)
+            nn.Dropout(0.1),
+            nn.Linear(d_model // 2, output_dim)  # output_dim=1
         )
 
     def forward(self, x):
-        # x shape: (batch_size, seq_length, input_dim)
-        batch_size = x.shape[0]
-
-        # Embedding katmanı
-        x = self.embedding(x)  # (batch_size, seq_length, d_model)
-
-        # Reformer katmanı
-        x = self.reformer(x)  # (batch_size, seq_length, d_model)
-
-        # Layer normalization
+        x = self.embedding(x)
+        x = x + self.pos_encoding
+        x = self.input_dropout(x)
+        x = self.reformer(x)
         x = self.layer_norm(x)
-
-        # Son sekans çıktısını al
-        x = x[:, -1, :]  # (batch_size, d_model)
-
-        # Çıktı katmanı
-        x = self.fc_out(x)  # (batch_size, output_dim)
-
+        x = x[:, -1, :]
+        x = self.fc_out(x)
         return x
 class FinancialDataset(Dataset):
     def __init__(self, X, y):
-        # Veri tiplerini ve boyutları kontrol et
-        self.X = torch.FloatTensor(X)  # Shape: (N, seq_length, features)
-        self.y = torch.FloatTensor(y)  # Shape: (N, features)
+        self.X = torch.FloatTensor(X)  
+        self.y = torch.FloatTensor(y)  
 
         print(f"Dataset X shape: {self.X.shape}")
         print(f"Dataset y shape: {self.y.shape}")
@@ -206,26 +227,23 @@ class FinancialDataset(Dataset):
         return self.X[idx], self.y[idx]
 
 def prepare_sequences(data, bucket_size=8, train=True):
-    """
-    Veriyi uygun sekans uzunluğunda hazırlar
-    """
-    seq_length = bucket_size * 2  # 16
-
+    """Geliştirilmiş sekans hazırlama fonksiyonu"""
+    seq_length = bucket_size * 2
     xs = []
     ys = []
 
-    # Örtüşmeyen sekanslar oluştur
-    for i in range(0, len(data) - seq_length - 1, 1 if not train else seq_length):
+   
+    close_index = 0
+
+    for i in range(0, len(data) - seq_length - 1, 1):
         x = data[i:i + seq_length]
-        y = data[i + seq_length]
+        # Sadece kapanış fiyatını al
+        y = data[i + seq_length, close_index:close_index+1]  # Tek boyutlu yerine (n,1) şeklinde
         if len(x) == seq_length:
             xs.append(x)
             ys.append(y)
 
-    X = np.array(xs)
-    y = np.array(ys)
-
-    return X, y
+    return np.array(xs), np.array(ys)
 def train_model(model, train_loader, optimizer, criterion, num_epochs, device):
     model.train()
     for epoch in range(num_epochs):
@@ -278,48 +296,60 @@ def main():
     bucket_size = 8
     seq_length = bucket_size * 2
 
-    # Model parametreleri
     model_params = {
         'input_dim': len(features),
-        'd_model': 256,  # 128'den 256'ya artırıldı
-        'depth': 6,      # 4'ten 6'ya artırıldı
-        'heads': 8,      # 4'ten 8'e artırıldı
+        'd_model': 64,  
+        'depth': 3,     
+        'heads': 4,     
         'bucket_size': bucket_size,
         'n_hashes': 4,
-        'output_dim': len(features)
+        'output_dim': 1
     }
-    if drive:
-      try:
+    try:
+        if drive:
             drive.mount('/content/drive')
-      except Exception as e:
-            print(f"Drive bağlantı hatası: {e}")
+    except Exception as e:
+        print(f"Drive bağlantı hatası: {e}")
 
     dosya_yolu = '/content/drive/MyDrive/ders/ALBRK.IS_veri.csv'
 
     try:
-        # 1. Veriyi oku ve ölçeklendir
         df = pd.read_csv(dosya_yolu)
-        scaler = MinMaxScaler()
-        scaled_data = scaler.fit_transform(df[features].values)
-        # Veriyi -1 ile 1 arasında normalize et
 
-        # 2. Önce veriyi train ve test olarak böl
+        # Kapanış fiyatı için scaler
+        close_scaler = MinMaxScaler()
+        df['Close_scaled'] = close_scaler.fit_transform(df[['Close']])
+
+        # Diğer özellikler için scaler
+        other_features = [f for f in features if f != 'Close']
+        scaled_features = {}
+        for feature in other_features:
+            scaler = MinMaxScaler()
+            df[f'{feature}_scaled'] = scaler.fit_transform(df[[feature]])
+            scaled_features[feature] = scaler
+
+        # Ölçeklendirilmiş verileri birleştir
+        scaled_columns = [f'{f}_scaled' for f in features]
+        scaled_data = df[scaled_columns].values
+
+        # Train-test split
         train_size = int(len(scaled_data) * 0.8)
         train_data = scaled_data[:train_size]
         test_data = scaled_data[train_size:]
 
-        # 3. Train ve test verilerini ayrı ayrı sekanslar haline getir
-        X_train, y_train = prepare_sequences(train_data, bucket_size, train=True)
-        X_test, y_test = prepare_sequences(test_data, bucket_size, train=False)
+        # Sekansları hazırla
+        X_train, y_train = prepare_sequences(train_data, bucket_size)
+        X_test, y_test = prepare_sequences(test_data, bucket_size)
 
-        print(f"Eğitim verisi şekli - X_train: {X_train.shape}, y_train: {y_train.shape}")
-        print(f"Test verisi şekli - X_test: {X_test.shape}, y_test: {y_test.shape}")
+        # Çıktı boyutunu kontrol et
+        print(f"Train shapes - X: {X_train.shape}, y: {y_train.shape}")
+        print(f"Test shapes - X: {X_test.shape}, y: {y_test.shape}")
 
-        # 4. Dataset'leri oluştur
+        # Dataset'leri oluştur
         train_dataset = FinancialDataset(X_train, y_train)
         test_dataset = FinancialDataset(X_test, y_test)
 
-        # 5. DataLoader'ları oluştur
+        # DataLoader'ları oluştur
         train_loader = DataLoader(
             train_dataset,
             batch_size=32,
@@ -329,69 +359,87 @@ def main():
 
         test_loader = DataLoader(
             test_dataset,
-            batch_size=16,
+            batch_size=32,
             shuffle=False,
             drop_last=True
         )
+
         # Model oluştur
         model = ReformerTimeSeries(**model_params).to(device)
-        optimizer = torch.optim.Adam(model.parameters(), lr=0.00005)
-        criterion = nn.MSELoss()
 
-        # Eğitim
-        train_model(model, train_loader, optimizer, criterion, num_epochs=100, device=device)
-        results = train_and_evaluate_model(
-        model=model,
-        train_loader=train_loader,
-        test_loader=test_loader,
-        optimizer=optimizer,
-        criterion=criterion,
-        num_epochs=200,
-        device=device
+        
+        optimizer = torch.optim.AdamW(
+        model.parameters(),
+        lr=0.00005,  
+        weight_decay=0.002,  
+        betas=(0.9, 0.999)
     )
+        criterion = nn.HuberLoss(delta=0.9)
+
+        # Scheduler
+        scheduler = torch.optim.lr_scheduler.OneCycleLR(
+            optimizer,
+            max_lr=0.001,
+            epochs=300,
+            steps_per_epoch=len(train_loader),
+            pct_start=0.3
+        )
+
+        # Eğitim ve değerlendirme
+        results = train_and_evaluate_model(
+            model=model,
+            train_loader=train_loader,
+            test_loader=test_loader,
+            optimizer=optimizer,
+            criterion=criterion,
+            num_epochs=300,
+            device=device,
+            patience=26
+        )
 
         print("\nModel Performans Metrikleri:")
         for metric, value in results['metrics'].items():
             print(f"{metric}: {value:.4f}")
 
-        print("\nDetaylı Sonuçlar:")
-        print(f"Eğitim Süresi: {results['training_time']:.2f} saniye")
-        print(f"Çıkarım Süresi: {results['inference_time']:.2f} saniye")
-
-        print(f"{metric}: {value:.4f}")
-
-          # Test ve değerlendirme
+        # Tahminleri topla
         model.eval()
+        all_predictions = []
+        all_true_values = []
+
         with torch.no_grad():
-              test_dataset = FinancialDataset(X_test, y_test)
-              test_loader = DataLoader(
-                  test_dataset,
-                  batch_size=1,
-                  shuffle=False,
-                  drop_last=True
-              )
-              predictions = []
+            for batch_X, batch_y in test_loader:
+                batch_X = batch_X.to(device)
+                output = model(batch_X)
+                all_predictions.extend(output.cpu().numpy())
+                all_true_values.extend(batch_y.numpy())
 
-              for batch_X, _ in test_loader:
-                  batch_X = batch_X.to(device)
-                  output = model(batch_X)
-                  predictions.append(output.cpu().numpy())
+        # Numpy array'e çevir
+        predictions = np.array(all_predictions)
+        true_values = np.array(all_true_values)
 
-        predictions = np.array(predictions).reshape(-1, len(features))
-        predictions = scaler.inverse_transform(predictions)
+        # Ölçeklendirmeyi geri al
+        predictions = close_scaler.inverse_transform(predictions)
+        true_values = close_scaler.inverse_transform(true_values)
 
-          # Görselleştirme
+        # Görselleştirme
         plt.figure(figsize=(15, 6))
-        actual_values = df['Close'].values[train_size * seq_length:train_size * seq_length + len(predictions) * seq_length]
-        plt.plot(actual_values, label='Gerçek')
-        plt.plot(predictions[:, 0], label='Tahmin')
+        plt.plot(true_values, label='Gerçek')
+        plt.plot(predictions, label='Tahmin')
+        plt.xlabel('Gün')
+        plt.ylabel('Fiyat (TL)')
         plt.legend()
         plt.title('Reformer Model - Kapanış Fiyatı Tahminleri')
         plt.show()
+        
+        model_path = 'model.pth'
+        torch.save(model.state_dict(), model_path)
+        files.download(model_path)
 
 
     except Exception as e:
         print(f"Bir hata oluştu: {e}")
+        import traceback
+        print(traceback.format_exc())
 
 if __name__ == "__main__":
     main()

@@ -1,4 +1,4 @@
-
+!pip install reformer-pytorch
 import numpy as np
 import pandas as pd
 import torch
@@ -17,7 +17,6 @@ from torch.optim.lr_scheduler import ExponentialLR
 from google.colab import files
 
 def calculate_metrics(y_true, y_pred):
-    """Geliştirilmiş metrik hesaplama fonksiyonu"""
     y_true = np.array(y_true).ravel()
     y_pred = np.array(y_pred).ravel()
 
@@ -50,7 +49,6 @@ def train_and_evaluate_model(model, train_loader, test_loader, optimizer, criter
 
     print("Eğitim başlıyor...")
     for epoch in range(num_epochs):
-        # Eğitim
         model.train()
         train_loss = 0
         for batch_X, batch_y in train_loader:
@@ -69,7 +67,6 @@ def train_and_evaluate_model(model, train_loader, test_loader, optimizer, criter
         avg_train_loss = train_loss / len(train_loader)
         train_losses.append(avg_train_loss)
 
-        # Test
         model.eval()
         test_loss = 0
         all_predictions = []
@@ -83,7 +80,6 @@ def train_and_evaluate_model(model, train_loader, test_loader, optimizer, criter
                 loss = criterion(output, batch_y)
                 test_loss += loss.item()
 
-                # Tahminleri ve gerçek değerleri topla
                 all_predictions.extend(output.cpu().numpy())
                 all_true_values.extend(batch_y.cpu().numpy())
 
@@ -95,7 +91,6 @@ def train_and_evaluate_model(model, train_loader, test_loader, optimizer, criter
                   f'Train Loss: {avg_train_loss:.4f}, '
                   f'Test Loss: {avg_test_loss:.4f}')
 
-        # Early stopping
         if avg_test_loss < best_test_loss:
             best_test_loss = avg_test_loss
             patience_counter = 0
@@ -109,7 +104,6 @@ def train_and_evaluate_model(model, train_loader, test_loader, optimizer, criter
 
     training_time = time.time() - training_start_time
 
-    # Son tahminler
     model.eval()
     final_predictions = []
     final_true_values = []
@@ -118,22 +112,18 @@ def train_and_evaluate_model(model, train_loader, test_loader, optimizer, criter
         for batch_X, batch_y in test_loader:
             batch_X = batch_X.to(device)
             output = model(batch_X)
-            # Tüm batch'i topla
             final_predictions.extend(output.cpu().numpy())
             final_true_values.extend(batch_y.numpy())
 
-            # Boyutları kontrol et
             if len(final_predictions) >= len(test_loader.dataset):
                 break
     inference_time = time.time() - inference_start_time
 
-    # Boyutları eşitle
     final_predictions = np.array(final_predictions)[:len(test_loader.dataset)]
     final_true_values = np.array(final_true_values)[:len(test_loader.dataset)]
 
     metrics = calculate_metrics(final_true_values, final_predictions)
 
-      # Görselleştirme
     plt.figure(figsize=(12, 6))
     plt.plot(train_losses, label='Eğitim Kaybı', color='blue')
     plt.plot(test_losses, label='Test Kaybı', color='red')
@@ -156,17 +146,14 @@ def train_and_evaluate_model(model, train_loader, test_loader, optimizer, criter
     }
 
 def prepare_sequences(data, bucket_size=8, train=True):
-    """Geliştirilmiş sekans hazırlama fonksiyonu"""
     seq_length = bucket_size * 2
     xs = []
     ys = []
 
-    # Sadece kapanış fiyatını tahmin edelim
     close_index = features.index('Close')
 
     for i in range(0, len(data) - seq_length - 1, 1):
         x = data[i:i + seq_length]
-        # Sadece bir sonraki kapanış fiyatını tahmin et
         y = data[i + seq_length, close_index]
         if len(x) == seq_length:
             xs.append(x)
@@ -214,8 +201,8 @@ class ReformerTimeSeries(nn.Module):
         return x
 class FinancialDataset(Dataset):
     def __init__(self, X, y):
-        self.X = torch.FloatTensor(X)  
-        self.y = torch.FloatTensor(y)  
+        self.X = torch.FloatTensor(X)  # Shape: (N, seq_length, features)
+        self.y = torch.FloatTensor(y)  # Shape: (N, features)
 
         print(f"Dataset X shape: {self.X.shape}")
         print(f"Dataset y shape: {self.y.shape}")
@@ -227,18 +214,14 @@ class FinancialDataset(Dataset):
         return self.X[idx], self.y[idx]
 
 def prepare_sequences(data, bucket_size=8, train=True):
-    """Geliştirilmiş sekans hazırlama fonksiyonu"""
     seq_length = bucket_size * 2
     xs = []
     ys = []
-
-   
     close_index = 0
 
     for i in range(0, len(data) - seq_length - 1, 1):
         x = data[i:i + seq_length]
-        # Sadece kapanış fiyatını al
-        y = data[i + seq_length, close_index:close_index+1]  # Tek boyutlu yerine (n,1) şeklinde
+        y = data[i + seq_length, close_index:close_index+1]  
         if len(x) == seq_length:
             xs.append(x)
             ys.append(y)
@@ -249,7 +232,6 @@ def train_model(model, train_loader, optimizer, criterion, num_epochs, device):
     for epoch in range(num_epochs):
         total_loss = 0
         for batch_X, batch_y in train_loader:
-            # Veri şekillerini kontrol et ve yazdır
             if epoch == 0:
                 print(f"Batch X shape: {batch_X.shape}")
                 print(f"Batch y shape: {batch_y.shape}")
@@ -260,7 +242,6 @@ def train_model(model, train_loader, optimizer, criterion, num_epochs, device):
             optimizer.zero_grad()
             output = model(batch_X)
 
-            # Çıktı şeklini kontrol et
             if epoch == 0:
                 print(f"Model output shape: {output.shape}")
 
@@ -273,7 +254,6 @@ def train_model(model, train_loader, optimizer, criterion, num_epochs, device):
             print(f'Epoch [{epoch+1}/{num_epochs}], Loss: {total_loss/len(train_loader):.4f}')
 features = [
     'Close',
-    'High',
     'Low',
     'Open',
     'Volume',
@@ -311,16 +291,16 @@ def main():
     except Exception as e:
         print(f"Drive bağlantı hatası: {e}")
 
-    dosya_yolu = '/content/drive/MyDrive/ders/ALBRK.IS_veri.csv'
+    dosya_yolu = '/content/drive/MyDrive/ders/GARAN.IS.csv'
 
     try:
         df = pd.read_csv(dosya_yolu)
 
-        # Kapanış fiyatı için scaler
+
         close_scaler = MinMaxScaler()
         df['Close_scaled'] = close_scaler.fit_transform(df[['Close']])
 
-        # Diğer özellikler için scaler
+
         other_features = [f for f in features if f != 'Close']
         scaled_features = {}
         for feature in other_features:
@@ -328,28 +308,28 @@ def main():
             df[f'{feature}_scaled'] = scaler.fit_transform(df[[feature]])
             scaled_features[feature] = scaler
 
-        # Ölçeklendirilmiş verileri birleştir
+
         scaled_columns = [f'{f}_scaled' for f in features]
         scaled_data = df[scaled_columns].values
 
-        # Train-test split
+
         train_size = int(len(scaled_data) * 0.8)
         train_data = scaled_data[:train_size]
         test_data = scaled_data[train_size:]
 
-        # Sekansları hazırla
+
         X_train, y_train = prepare_sequences(train_data, bucket_size)
         X_test, y_test = prepare_sequences(test_data, bucket_size)
 
-        # Çıktı boyutunu kontrol et
+
         print(f"Train shapes - X: {X_train.shape}, y: {y_train.shape}")
         print(f"Test shapes - X: {X_test.shape}, y: {y_test.shape}")
 
-        # Dataset'leri oluştur
+
         train_dataset = FinancialDataset(X_train, y_train)
         test_dataset = FinancialDataset(X_test, y_test)
 
-        # DataLoader'ları oluştur
+
         train_loader = DataLoader(
             train_dataset,
             batch_size=32,
@@ -364,10 +344,8 @@ def main():
             drop_last=True
         )
 
-        # Model oluştur
         model = ReformerTimeSeries(**model_params).to(device)
 
-        
         optimizer = torch.optim.AdamW(
         model.parameters(),
         lr=0.00005,  
@@ -376,7 +354,6 @@ def main():
     )
         criterion = nn.HuberLoss(delta=0.9)
 
-        # Scheduler
         scheduler = torch.optim.lr_scheduler.OneCycleLR(
             optimizer,
             max_lr=0.001,
@@ -385,7 +362,6 @@ def main():
             pct_start=0.3
         )
 
-        # Eğitim ve değerlendirme
         results = train_and_evaluate_model(
             model=model,
             train_loader=train_loader,
@@ -397,11 +373,12 @@ def main():
             patience=26
         )
 
+
         print("\nModel Performans Metrikleri:")
         for metric, value in results['metrics'].items():
             print(f"{metric}: {value:.4f}")
 
-        # Tahminleri topla
+
         model.eval()
         all_predictions = []
         all_true_values = []
@@ -413,15 +390,14 @@ def main():
                 all_predictions.extend(output.cpu().numpy())
                 all_true_values.extend(batch_y.numpy())
 
-        # Numpy array'e çevir
+
         predictions = np.array(all_predictions)
         true_values = np.array(all_true_values)
 
-        # Ölçeklendirmeyi geri al
+
         predictions = close_scaler.inverse_transform(predictions)
         true_values = close_scaler.inverse_transform(true_values)
 
-        # Görselleştirme
         plt.figure(figsize=(15, 6))
         plt.plot(true_values, label='Gerçek')
         plt.plot(predictions, label='Tahmin')
@@ -430,7 +406,7 @@ def main():
         plt.legend()
         plt.title('Reformer Model - Kapanış Fiyatı Tahminleri')
         plt.show()
-        
+
         model_path = 'model.pth'
         torch.save(model.state_dict(), model_path)
         files.download(model_path)

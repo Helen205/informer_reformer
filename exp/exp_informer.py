@@ -249,17 +249,17 @@ class Exp_Informer(Exp_Basic):
         print("test shape",preds.shape,trues.shape)
 
         folder_path='./results/'+setting+'/'
-        mae,mse,rmse,mape,mspe=metric(preds,trues)
+        mae,mse,rmse,mape,r2=metric(preds,trues)
         if not os.path.exists(folder_path):
             os.makedirs(folder_path)
-        print('mse:{}, mae:{}, rmse:{}, mape:{}, mspe:{}'.format(mse, mae, rmse, mape, mspe))
+        print('mse:{}, mae:{}, rmse:{}, mape:{}, r2:{}'.format(mse, mae, rmse, mape, r2))
 
-        np.save(folder_path+'metrics.npy', np.array([mae, mse, rmse, mape, mspe]))
+        np.save(folder_path+'metrics.npy', np.array([mae, mse, rmse, mape, r2]))
         np.save(folder_path+'pred.npy', preds)
         np.save(folder_path+'true.npy', trues)
 
 
-        return mae, mse, rmse, mape, mspe
+        return mae, mse, rmse, mape, r2
 
 
 
